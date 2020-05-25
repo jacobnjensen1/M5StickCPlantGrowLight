@@ -6,7 +6,7 @@
 #include "timer_config.h"
 #include <ezTime.h>
 
-#include <M5StickC.h>
+//#include <M5StickC.h>   This is just a thing, not an M5Stick
   
 WiFiClient wifiClient;
 String uniqueId;
@@ -17,9 +17,9 @@ boolean light_state = false;
 boolean prev_desired_state = false;
 boolean manual_override = false;
 
-const int STATUS_LED = 10;
-const int POWER_PIN = 26;
-const int BUTTON_PIN = 37;
+//const int STATUS_LED = 5;  // 10 for esp32 M5StickC, 5 for esp32 Thing
+const int POWER_PIN = 5;  // 26 for esp32 M5StickC, 5 for esp32 Thing
+const int BUTTON_PIN = 0; 
 
 /*
 static const char *ENUMERATE_TOPIC = "616b7b49-aab4-4cbb-a7a8-ba7ed744dc11/Enumerate";
@@ -58,11 +58,11 @@ void PrintMacAddr(const unsigned char *mac) {
 
 void GetUniqueId(String &id, const char *prefix)
 {
-const int WL_MAC_ADDR_LENGTH = 12;
+const int WL_MAC_ADDR_LENGTH_MINE = 12;
 
    // Do a little work to get a unique-ish name. Append the
   // last two bytes of the MAC (HEX'd) to "<prefix>-"
-  uint8_t mac[WL_MAC_ADDR_LENGTH];
+  uint8_t mac[WL_MAC_ADDR_LENGTH_MINE];
   WiFi.macAddress(mac);
   String macID = "";
   PrintMacAddr(mac);
@@ -108,8 +108,97 @@ void connect_mqtt(PubSubClient &client, const char *server, const unsigned int p
 }
 */
 
+
+/*
+void initLCD() {
+    // put your setup code here, to run once:
+  M5.begin();
+  M5.Lcd.setRotation(1);
+  M5.Lcd.fillScreen(BLACK);
+  
+  M5.Lcd.setTextSize(1);
+  M5.Lcd.setCursor(32, 0, 2);
+  M5.Lcd.println("Grow Lights");
+}
+
+void printStatus(const char *wifiStatus, const char *mqttStatus) {
+
+  M5.Lcd.fillScreen(BLACK);
+  M5.Lcd.setCursor(32, 0, 2);
+  M5.Lcd.println("Grow Lights");
+
+  M5.Lcd.setCursor(0, 30);
+  M5.Lcd.println(wifiStatus);
+  M5.Lcd.println(mqttStatus);
+}
+*/
+void print_times() {
+  Serial.println("");
+  Serial.println("ON TIMES:");
+  for (byte i = 0; i < (sizeof(on_times) / sizeof(on_times[0])); i++){
+    TimeSpec time = on_times[i];
+    Serial.println(String(time.hour) + ":" + String(time.minute));
+  }
+  Serial.println("");
+  Serial.println("OFF TIMES:");
+  for (byte i = 0; i < (sizeof(on_times) / sizeof(on_times[0])); i++){
+    TimeSpec time = off_times[i];
+    Serial.println(String(time.hour) + ":" + String(time.minute));
+  }
+}
+
+void setup() {
+  digitalWrite(POWER_PIN, 0);
+  //digitalWrite(STATUS_LED, 1);    // Inverted for the built-in light
+  //pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(POWER_PIN, OUTPUT);  
+  //pinMode(STATUS_LED, OUTPUT);
+
+  //Serial.setDebugOutput(true);
+
+  //initLCD();
+    
+  Serial.begin(115200);
+  //delay(5000); // This is necessary for the ESP32 to get serial messages
+  Serial.println("..... STARTING .....");
+  Serial.println("Connecting to WiFi ...");
+  WiFi.begin(cfg.ssid, cfg.password);
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Waiting for WiFi..........");
+    delay(500);
+  }
+  GetUniqueId(uniqueId, "Growlight");
+  Serial.println("UniqueID: " + uniqueId);
+  Serial.println("Connected to WiFi, NOT Connecting to MQTT ...");
+/* 
+  mqttClient.setCallback(mqttCallback);
+  connect_mqtt(mqttClient, cfg.mqtt_server, cfg.mqtt_port, uniqueId.c_str());
+  printStatus("Connected to WiFi", "Connected to MQTT");
+*/
+  waitForSync();  // from ezTime, means wait for NTP to get date and time.
+  
+  LocalTime.setLocation(LOCAL_TIMEZONE);
+  Serial.println("Local time: " + LocalTime.dateTime());
+  Serial.println("Hour: " + String(LocalTime.hour()) + " Minute: " + String(LocalTime.minute()));  
+  print_times();    
+}
+
+void loop() {
+/*
+  mqttClient.loop();
+  if(!mqttClient.connected()){
+    Serial.print("-");
+    printStatus("Connected to WiFi", "Connecting to MQTT ...");
+    connect_mqtt(mqttClient, cfg.mqtt_server, cfg.mqtt_port, uniqueId.c_str());
+    printStatus("Connected to wifi", "Connected to MQTT");
+  }
+*/
+  check_timer();
+  checkButtonPress();
+} 
+
 void check_timer() {
-  const int CHECK_FREQUENCY = 5000;
+  /*const int CHECK_FREQUENCY = 5000;
   static int lastPrintTime = 0;
   int currentTime = millis();
   if(currentTime - lastPrintTime > CHECK_FREQUENCY || lastPrintTime == 0) {
@@ -131,76 +220,49 @@ void check_timer() {
       manual_override = false;      
     }
       
-    prev_desired_state = desiredState;
+    prev_desired_state = desiredState;    
   }
-}
+  */
 
-void initLCD() {
-    // put your setup code here, to run once:
-  M5.begin();
-  M5.Lcd.setRotation(1);
-  M5.Lcd.fillScreen(BLACK);
-  
-  M5.Lcd.setTextSize(1);
-  M5.Lcd.setCursor(32, 0, 2);
-  M5.Lcd.println("Grow Lights");
-}
+  const int CHECK_FREQUENCY = 60000;
+  static int lastPrintTime = 0;
+  int currentTime = millis();
+  if(currentTime - lastPrintTime > CHECK_FREQUENCY || lastPrintTime == 0) {
+    int current_second_of_day = LocalTime.hour() * SECONDS_PER_HOUR + LocalTime.minute() * SECONDS_PER_MINUTE + LocalTime.second();
 
-void printStatus(const char *wifiStatus, const char *mqttStatus) {
-  M5.Lcd.fillScreen(BLACK);
-  M5.Lcd.setCursor(32, 0, 2);
-  M5.Lcd.println("Grow Lights");
-
-  M5.Lcd.setCursor(0, 30);
-  M5.Lcd.println(wifiStatus);
-  M5.Lcd.println(mqttStatus);
-}
-
-void setup() {
-  digitalWrite(POWER_PIN, 0);
-  digitalWrite(STATUS_LED, 1);    // Inverted for the built-in light
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-  pinMode(POWER_PIN, OUTPUT);  
-  pinMode(STATUS_LED, OUTPUT);
-
-  initLCD();
+    Serial.println("Checking at " + String(LocalTime.hour()) + ":" + String(LocalTime.minute()) + ":" + String(LocalTime.second()));
     
-  Serial.begin(115200);
-  //delay(5000); // This is necessary for the ESP32 to get serial messages
-  Serial.println("..... STARTING .....");
-  printStatus("Connecting to WiFi ...", "");
-  WiFi.begin(cfg.ssid, cfg.password);
-  while (WiFi.status() != WL_CONNECTED) {
-		delay(100);
-	}
-  GetUniqueId(uniqueId, "Growlight");
-  Serial.println("UniqueID: " + uniqueId);
-  printStatus("Connected to WiFi", "NOT Connecting to MQTT ...");
-/* 
-  mqttClient.setCallback(mqttCallback);
-  connect_mqtt(mqttClient, cfg.mqtt_server, cfg.mqtt_port, uniqueId.c_str());
-  printStatus("Connected to WiFi", "Connected to MQTT");
-*/
-  waitForSync();  // from ezTime, means wait for NTP to get date and time.
-  
-  LocalTime.setLocation(LOCAL_TIMEZONE);
-  Serial.println("Local time: " + LocalTime.dateTime());
-  Serial.println("Hour: " + String(LocalTime.hour()) + " Minute: " + String(LocalTime.minute()));      
+    for (byte i = 0; i < (sizeof(on_times) / sizeof(on_times[0])); i++){
+      if (current_second_of_day - on_times[i].secondval() < 31 && current_second_of_day - on_times[i].secondval() > -31 ) {
+        setLightState(1);
+      }
+    }
+
+    for (byte i = 0; i < (sizeof(off_times) / sizeof(off_times[0])); i++){
+      if (current_second_of_day - off_times[i].secondval() < 31 && current_second_of_day - off_times[i].secondval() > -31 ) {
+        setLightState(0);
+      }
+    }
+    
+    lastPrintTime = currentTime;
+  }
 }
 
-void loop() {
-/*
-	mqttClient.loop();
-  if(!mqttClient.connected()){
-    Serial.print("-");
-    printStatus("Connected to WiFi", "Connecting to MQTT ...");
-    connect_mqtt(mqttClient, cfg.mqtt_server, cfg.mqtt_port, uniqueId.c_str());
-    printStatus("Connected to wifi", "Connected to MQTT");
-  }
-*/
-  check_timer();
-  checkButtonPress();
-} 
+void checkButtonPress() {
+
+  static unsigned long lastDebounceTime = 0;
+  static unsigned long debounceDelay = 100;
+  static int lastReading = digitalRead(BUTTON_PIN);
+
+  int reading = digitalRead(BUTTON_PIN);
+  if(reading != lastReading) {
+    if(millis() - lastDebounceTime > debounceDelay) {
+      handleButtonPress();
+      Serial.println("BUTTONS!!!!!");
+    }
+    lastDebounceTime = millis();
+  }  
+}
 
 void onEnumerate(byte *msg, unsigned int len) {
   Serial.println("Enumerate");
@@ -208,7 +270,7 @@ void onEnumerate(byte *msg, unsigned int len) {
   create_status_message(topicMsg, uniqueId, light_state);
 //  mqttClient.publish(STATUS_TOPIC, topicMsg.c_str());
 }
-
+/*
 void onLightOn(byte *msg, unsigned int len) {
   Serial.println("OnLightOn");
   if(strncmp((const char *)msg, uniqueId.c_str(), uniqueId.length()) == 0) {
@@ -224,35 +286,22 @@ void onLightOff(byte *msg, unsigned int len) {
     manual_override = true;
   }
 }
-
-void checkButtonPress() {
-
-  static unsigned long lastDebounceTime = 0;
-  static unsigned long debounceDelay = 100;
-  static int lastReading = digitalRead(BUTTON_PIN);
-
-  int reading = digitalRead(BUTTON_PIN);
-  if(reading != lastReading) {
-    if(millis() - lastDebounceTime > debounceDelay) {
-      handleButtonPress();
-    }
-    lastDebounceTime = millis();
-  }  
-}
+*/
 
 void handleButtonPress() {
   setLightState(!light_state);
   manual_override = true;
 }
 
- void setLightState(bool onOff) {
+
+void setLightState(bool onOff) {
   if(onOff)
     Serial.println("Light state: On");
   else
     Serial.println("Light state: Off");
   
   digitalWrite(POWER_PIN, onOff);
-  digitalWrite(STATUS_LED, !onOff);    // Inverted for the built-in light
+  //digitalWrite(STATUS_LED, !onOff);    // Inverted for the built-in light
   light_state = onOff;
 
   String msg;
