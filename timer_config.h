@@ -1,6 +1,5 @@
-
-TimeSpec start_time = TimeSpec(7, 00, 0);   // 7:00 AM
-TimeSpec stop_time = TimeSpec(22, 00, 0);   // 10:00 PM
-
-TimeSpec on_times[] =  {TimeSpec(7, 34, 0), TimeSpec(18, 42, 0)}; //Add TimeSpecs as desired
-TimeSpec off_times[] = {TimeSpec(9, 26, 0), TimeSpec(22, 17, 0)};
+//TimeSpecs use 24hr time
+TimeSpec on_times[] =  {TimeSpec(4, 0, 0)}; //Add TimeSpecs as desired
+TimeSpec off_times[] = {TimeSpec(20, 0, 0)};
+//array format: {TimeSpec(hr, min, sec), TimeSpec(hr, min,sec)}
+//values of 8 and 9 cannot be inserted as 08 or 09 (leading 0 specifies base 8)
