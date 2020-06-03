@@ -104,7 +104,7 @@ void setup() {
   Serial.println("..... STARTING .....");
   print_times();    
   
-  //syncRTC(); //Uncomment to resync the internal clock
+  syncRTC(); //Uncomment to resync the internal clock
   printStatus();
 }
 
